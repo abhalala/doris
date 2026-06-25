@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>D.O.R.I.S. — Durable Offloaded Rust Isomorphic Stack</title>
+  <meta name="description" content="D.O.R.I.S. is a Cloudflare-native architecture pattern: Rust WASM Workers + Axum router + Durable Objects for CPU offload and WebSocket push + D1 database." />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <span class="logo">D.O.R.I.S.</span>
+      <div class="nav-links">
+        <a href="#pillars">Pillars</a>
+        <a href="#diagram">Architecture</a>
+        <a href="#structure">Structure</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#reference">Reference</a>
+        <a href="https://github.com/abhalala/doris" class="gh-link" target="_blank">GitHub →</a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-bg-grid"></div>
+    <div class="hero-content">
+      <div class="hero-tag">Cloudflare-Native Architecture Pattern</div>
+      <h1>
+        <span class="gradient-text">D</span>urable
+        <span class="gradient-text">O</span>ffloaded
+        <span class="gradient-text">R</span>ust
+        <span class="gradient-text">I</span>somorphic
+        <span class="gradient-text">S</span>tack
+      </h1>
+      <p class="hero-sub">
+        Zero infrastructure. One-click deploy. Rust on Cloudflare Workers.
+      </p>
+      <div class="hero-cta">
+        <a href="#pillars" class="btn primary">Explore the Pattern</a>
+        <a href="https://github.com/abhalala/doris" class="btn secondary" target="_blank">View on GitHub</a>
+      </div>
+      <div class="hero-badges">
+        <span>🦀 Rust → WASM</span>
+        <span>☁️ Cloudflare Workers</span>
+        <span>🗄️ D1 Database</span>
+        <span>⚡ Durable Objects</span>
+        <span>🚀 One-Click Deploy</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="pillars" class="section pillars">
+    <div class="section-inner">
+      <h2 class="section-title">The <span class="gradient-text">7 Pillars</span> of D.O.R.I.S.</h2>
+      <p class="section-sub">Every pillar is optional. Add or remove bindings as your app grows.</p>
+
+      <div class="pillar-grid">
+        <div class="pillar-card" style="--accent: #f97316;">
+          <div class="pillar-num">01</div>
+          <h3>Rust → WASM via <code>worker-build</code></h3>
+          <p>Rust compiles to WebAssembly using the <code>worker</code> crate and <code>worker-build</code>. Axum runs inside the Worker for ergonomic routing. Pin the toolchain for reproducible CI builds.</p>
+          <pre><code><span class="cmt"># rust-toolchain.toml</span>
+<span class="k">channel</span> = <span class="s">"1.91.1"</span>
+<span class="k">targets</span> = [<span class="s">"wasm32-unknown-unknown"</span>]</code></pre>
+        </div>
+
+        <div class="pillar-card" style="--accent: #8b5cf6;">
+          <div class="pillar-num">02</div>
+          <h3>JS Entry Wrapper</h3>
+          <p>Thin JS layer (<code>src/entry.js</code>) imports the Rust WASM module, routes WebSocket connections to <code>NotifyDo</code>, CPU-heavy endpoints to <code>HeavyDo</code>, and falls through everything else to Rust.</p>
+          <pre><code><span class="k">if</span> (env.<span class="n">HEAVY_DO</span>) {
+  <span class="k">const</span> stub = env.HEAVY_DO
+    .idFromName(shardKey);
+  <span class="k">return</span> stub.fetch(request);
+}
+<span class="k">return</span> worker.fetch(request);</code></pre>
+        </div>
+
+        <div class="pillar-card" style="--accent: #06b6d4;">
+          <div class="pillar-num">03</div>
+          <h3>HeavyDo CPU Offload</h3>
+          <p>Durable Objects have a <strong>30s CPU budget</strong> vs Workers' few ms. HeavyDo reuses the <strong>same Axum router</strong> — no duplicated business logic. Handles: imports, password hashing, key rotation, 2FA, account deletion.</p>
+          <pre><code><span class="k">impl</span> DurableObject <span class="k">for</span> HeavyDo {
+  <span class="k">async fn</span> fetch(...) {
+    <span class="c">// Same router as main worker!</span>
+    router::api_router(self.env.clone())
+  }
+}</code></pre>
+        </div>
+
+        <div class="pillar-card" style="--accent: #10b981;">
+          <div class="pillar-num">04</div>
+          <h3>NotifyDo WebSocket Push</h3>
+          <p>Tags-based fan-out for real-time sync. Each WebSocket connection tagged by user ID. Anonymous hub for file downloads. Optional mobile push via relay service.</p>
+          <pre><code><span class="c">// Tag a connection</span>
+ws.<span class="n">tag</span>(<span class="s">"user:abc123"</span>);
+<span class="c">// Fan out to all user tags</span>
+ws.<span class="n">broadcast</span>(<span class="s">"user:abc123"</span>, msg);</code></pre>
+        </div>
+
+        <div class="pillar-card" style="--accent: #f59e0b;">
+          <div class="pillar-num">05</div>
+          <h3>D1 Database</h3>
+          <p>SQLite-compatible, serverless, auto-scaling. Session-backed reads with <code>first-primary</code> consistency for write-then-read. Unified <code>Db</code> enum with <code>d1_query!</code> macro for ergonomic prepared statements.</p>
+          <pre><code><span class="k">[[d1_databases]]</span>
+<span class="k">binding</span> = <span class="s">"vault1"</span>
+<span class="k">database_name</span> = <span class="s">"vault1"</span>
+<span class="k">database_id</span> = <span class="s">"${D1_DATABASE_ID}"</span></code></pre>
+        </div>
+
+        <div class="pillar-card" style="--accent: #ec4899;">
+          <div class="pillar-num">06</div>
+          <h3>Rate Limiting + Assets</h3>
+          <p>Cloudflare-native rate limiting via <code>[[ratelimits]]</code>. Static assets served directly from Cloudflare's edge. <code>run_worker_first</code> limits Worker invocation to API routes only. Secrets via Cloudflare Dashboard.</p>
+          <pre><code><span class="k">[[ratelimits]]</span>
+<span class="k">name</span> = <span class="s">"LOGIN_RATE_LIMITER"</span>
+<span class="k">simple</span> = { <span class="n">limit</span> = <span class="m">5</span>, <span class="n">period</span> = <span class="m">60</span> }</code></pre>
+        </div>
+
+        <div class="pillar-card" style="--accent: #6366f1;">
+          <div class="pillar-num">07</div>
+          <h3>One-Click CI/CD</h3>
+          <p>3 GitHub Actions workflows: Build (main → prod), Deploy Dev (dev branch), Backup D1 (daily cron). Idempotent D1 bootstrap. Fork → set 3 secrets → push main → auto-deploys.</p>
+          <pre><code><span class="c"># D1 bootstrap (idempotent)</span>
+<span class="k">if</span> DB empty:
+  apply schema.sql
+  mark migrations
+apply pending migrations
+<span class="n">npx wrangler deploy</span></code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="diagram" class="section diagram-section">
+    <div class="section-inner">
+      <h2 class="section-title">Architecture <span class="gradient-text">Flow</span></h2>
+      <div class="diagram-container">
+        <div class="diagram" id="arch-diagram">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="structure" class="section structure-section">
+    <div class="section-inner">
+      <h2 class="section-title">Project <span class="gradient-text">Structure</span></h2>
+      <div class="structure-grid">
+        <div class="tree-view">
+          <pre><code class="tree">doris/
+├── src/
+│   ├── entry.js              # JS wrapper
+│   ├── lib.rs                # Rust entry
+│   ├── router.rs             # Axum router
+│   ├── db.rs                 # D1 + d1_query!
+│   ├── auth.rs               # JWT auth
+│   ├── error.rs              # AppError enum
+│   ├── crypto.rs             # PBKDF2, Argon2
+│   ├── notifications.rs      # WS push types
+│   ├── push.rs               # Mobile push
+│   ├── handlers/             # Axum handlers
+│   │   ├── mod.rs
+│   │   ├── accounts.rs
+│   │   ├── ciphers.rs
+│   │   ├── sync.rs
+│   │   └── ...
+│   ├── models/               # Data types
+│   │   ├── user.rs
+│   │   ├── cipher.rs
+│   │   └── ...
+│   └── durable/              # Durable Objects
+│       ├── heavy_do.rs
+│       └── notify_do.rs
+├── migrations/               # D1 migrations
+├── sql/schema.sql            # Base schema
+├── docs/                     # Deployment guides
+├── public/                   # Static assets
+├── .github/workflows/        # CI/CD
+├── wrangler.toml             # Cloudflare config
+├── Cargo.toml                # Rust deps
+├── rust-toolchain.toml       # Pinned Rust
+└── AGENTS.md                 # AI agent guide</code></pre>
+        </div>
+        <div class="structure-notes">
+          <h3>Key Files</h3>
+          <div class="note-card">
+            <code>src/entry.js</code>
+            <p>JS wrapper that routes WebSocket → NotifyDo, CPU-heavy → HeavyDo, everything else → Rust WASM.</p>
+          </div>
+          <div class="note-card">
+            <code>src/durable/heavy_do.rs</code>
+            <p>~60 lines — just calls <code>router::api_router()</code> like the main Worker. No duplicated logic.</p>
+          </div>
+          <div class="note-card">
+            <code>wrangler.toml</code>
+            <p>Dual env (prod/dev), DO bindings, D1, KV, rate limits, static assets, cron triggers.</p>
+          </div>
+          <div class="note-card">
+            <code>.github/workflows/push-cloudflare.yaml</code>
+            <p>Full one-click deploy pipeline with D1 bootstrap resilience.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="quickstart" class="section quickstart-section">
+    <div class="section-inner">
+      <h2 class="section-title"><span class="gradient-text">Quickstart</span> Checklist</h2>
+      <div class="checklist">
+        <div class="checklist-item" data-step="1">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Create from template</h4>
+            <p>Clone warden-worker or scaffold from scratch with the project structure above.</p>
+          </div>
+        </div>
+        <div class="checklist-item" data-step="2">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Set up Rust + WASM</h4>
+            <p><code>rustup target add wasm32-unknown-unknown</code> + install <code>worker-build</code></p>
+          </div>
+        </div>
+        <div class="checklist-item" data-step="3">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Write wrangler.toml</h4>
+            <p>D1 binding, DO bindings, rate limits, asset directory, cron triggers.</p>
+          </div>
+        </div>
+        <div class="checklist-item" data-step="4">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Create D1 database</h4>
+            <p><code>npx wrangler d1 create my-db</code></p>
+          </div>
+        </div>
+        <div class="checklist-item" data-step="5">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>Build your Axum router</h4>
+            <p>Define all routes in <code>src/router.rs</code>, the single source of truth.</p>
+          </div>
+        </div>
+        <div class="checklist-item" data-step="6">
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <h4>Add Durable Objects</h4>
+            <p>HeavyDo for CPU offload + NotifyDo for WebSocket push in <code>src/durable/</code></p>
+          </div>
+        </div>
+        <div class="checklist-item" data-step="7">
+          <div class="step-num">7</div>
+          <div class="step-content">
+            <h4>Set up CI/CD</h4>
+            <p>3 workflows: build+deploy (main), deploy dev (dev branch), D1 backup (daily cron).</p>
+          </div>
+        </div>
+        <div class="checklist-item" data-step="8">
+          <div class="step-num">8</div>
+          <div class="step-content">
+            <h4>Deploy 🚀</h4>
+            <p>Add GitHub Secrets → push to main → auto-deploys to Cloudflare.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="reference" class="section reference-section">
+    <div class="section-inner">
+      <h2 class="section-title">Reference <span class="gradient-text">Implementation</span></h2>
+      <div class="ref-card">
+        <div class="ref-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="ref-content">
+          <h3>warden-worker</h3>
+          <p>A Bitwarden-compatible server built entirely on Cloudflare Workers using D.O.R.I.S. Rust → WASM, Durable Objects for CPU-heavy operations, D1 for storage, and one-click CI/CD from GitHub.</p>
+          <a href="https://github.com/abhalala/warden-worker" class="btn primary" target="_blank">View on GitHub →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <p>D.O.R.I.S. — Built with ❤️ from the warden-worker project</p>
+      <p><a href="https://github.com/abhalala/doris" target="_blank">GitHub</a> · <a href="https://doris.bhalala.org" target="_blank">doris.bhalala.org</a></p>
+    </div>
+  </footer>
+
+  <script src="/js/diagram.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>

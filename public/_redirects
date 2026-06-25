@@ -1,0 +1,6 @@
+# Cloudflare Pages redirects
+/pillars /#pillars 301
+/diagram /#diagram 301
+/structure /#structure 301
+/quickstart /#quickstart 301
+/reference /#reference 301
