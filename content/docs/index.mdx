@@ -1,0 +1,33 @@
+---
+title: Overview
+description: Introduction to D.O.R.I.S. — Durable Offloaded Rust Isomorphic Stack
+---
+
+**D.O.R.I.S.** is a Cloudflare-native architecture pattern for building
+cloud-native, serverless backends entirely on Cloudflare — no VPS, no containers,
+no Kubernetes. Everything runs on Cloudflare Workers, Durable Objects, D1, R2/KV,
+and native Cloudflare primitives.
+
+It was extracted from [warden-worker](https://github.com/abhalala/warden-worker),
+a Bitwarden-compatible server written in Rust compiled to WASM on Cloudflare Workers.
+
+## The 7 Pillars of D.O.R.I.S.
+
+Every pillar is optional. Add or remove bindings as your app grows.
+
+1. **[Rust → WASM via \`worker-build\`](/docs/pillars#1-rust--wasm-via-worker-build)** — Rust compiles to WASM using the \`worker\` crate, Axum for routing inside Workers
+2. **[JS Entry Wrapper](/docs/pillars#2-js-entry-wrapper)** — Thin JS layer routes WebSocket → NotifyDo, CPU-heavy → HeavyDo, rest → Rust
+3. **[HeavyDo CPU Offload](/docs/pillars#3-anydo-cpu-offload)** — Durable Object with 30s CPU budget reusing the same Axum router
+4. **[NotifyDo WebSocket Push](/docs/pillars#4-notifydo-websocket-push)** — Tags-based fan-out for real-time sync
+5. **[D1 Database](/docs/pillars#5-d1-database)** — SQLite-compatible, serverless, auto-scaling with \`first-primary\` consistency
+6. **[Rate Limiting + Assets](/docs/pillars#6-rate-limiting--assets)** — Cloudflare-native rate limiting, edge-served static assets
+7. **[One-Click CI/CD](/docs/pillars#7-one-click-cicd)** — 3 GitHub Actions workflows with idempotent D1 bootstrap
+
+<Cards>
+  <Card title="The 7 Pillars" href="/docs/pillars" icon="layers" />
+  <Card title="Architecture" href="/docs/architecture" icon="network" />
+  <Card title="Project Structure" href="/docs/structure" icon="folder-tree" />
+  <Card title="Quickstart" href="/docs/quickstart" icon="zap" />
+  <Card title="Reference" href="/docs/reference" icon="book-open" />
+  <Card title="GitHub" href="https://github.com/abhalala/doris" icon="github" />
+</Cards>

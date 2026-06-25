@@ -1,0 +1,103 @@
+---
+title: Quickstart
+description: Get started with D.O.R.I.S. in 8 steps
+---
+
+## Prerequisites
+
+- [Rust](https://rustup.rs/) with \`wasm32-unknown-unknown\` target
+- [Node.js](https://nodejs.org/) for Wrangler CLI
+- [Cloudflare account](https://dash.cloudflare.com/sign-up)
+- [GitHub account](https://github.com)
+
+## 8-Step Checklist
+
+<Steps>
+### Create from template
+
+Clone [warden-worker](https://github.com/abhalala/warden-worker) or scaffold from scratch with the [project structure](/docs/structure) guide.
+
+### Set up Rust + WASM
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install worker-build
+```
+
+### Write \`wrangler.toml\`
+
+Configure D1 binding, DO bindings, rate limits, asset directory, cron triggers.
+
+```toml
+name = "my-worker"
+main = "src/entry.js"
+compatibility_date = "2025-09-19"
+
+[durable_objects]
+bindings = [
+  { name = "HEAVY_DO", class_name = "HeavyDo" },
+  { name = "NOTIFY_DO", class_name = "NotifyDo" },
+]
+
+[[d1_databases]]
+binding = "vault1"
+database_name = "vault1"
+database_id = "${D1_DATABASE_ID}"
+```
+
+### Create D1 database
+
+```bash
+npx wrangler d1 create my-db
+```
+
+### Build your Axum router
+
+Define all routes in \`src/router.rs\` — the single source of truth.
+
+```rust
+pub fn api_router(env: Env) -> Router {
+    Router::new()
+        .route("/api/health", get(health_check))
+        .route("/api/sync", get(sync))
+        .route("/api/config", get(config))
+}
+```
+
+### Add Durable Objects
+
+\`HeavyDo\` for CPU offload + \`NotifyDo\` for WebSocket push in \`src/durable/\`.
+
+### Set up CI/CD
+
+Add these secrets to your GitHub repo:
+
+| Secret | Description |
+|--------|-------------|
+| \`CLOUDFLARE_API_TOKEN\` | Cloudflare API token with Workers + Pages permissions |
+| \`CLOUDFLARE_ACCOUNT_ID\` | Your Cloudflare account ID |
+| \`D1_DATABASE_ID\` | Your D1 database ID |
+
+Then push to \`main\` — the GitHub Actions workflow handles the rest:
+1. Checkout + Rust toolchain setup
+2. Build with \`worker-build\`
+3. Bootstrap D1 schema (idempotent)
+4. Apply D1 migrations
+5. \`npx wrangler deploy\`
+
+### Deploy 🚀
+
+Push to \`main\` → auto-deploys to Cloudflare Workers.
+
+For manual deploy:
+
+```bash
+npx wrangler deploy
+```
+</Steps>
+
+## What's Next?
+
+- Read the [architecture docs](/docs/architecture) for design details
+- Check the [project structure](/docs/structure) for file organization
+- Explore [warden-worker](https://github.com/abhalala/warden-worker) — the reference implementation

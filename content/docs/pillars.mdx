@@ -1,0 +1,132 @@
+---
+title: The 7 Pillars
+description: The seven architectural pillars of D.O.R.I.S.
+---
+
+Every pillar is optional. Add or remove bindings as your app grows.
+
+<Callout type="info">
+  The pillars are ordered from the foundation up — skip what you don't need.
+</Callout>
+
+## 01. Rust → WASM via \`worker-build\`
+
+Rust compiles to WebAssembly using the \`worker\` crate and \`worker-build\`.
+Axum runs **inside** the Worker for ergonomic HTTP routing.
+
+Key dependencies: \`worker\`, \`axum\`, \`serde\`, \`tower-http\`, \`chrono\`, \`uuid\`, \`jwt-compact\`.
+
+Pin the Rust toolchain in \`rust-toolchain.toml\` for reproducible CI builds:
+
+```toml
+# rust-toolchain.toml
+[toolchain]
+channel = "1.91.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+```
+
+## 02. JS Entry Wrapper
+
+Thin JS layer (\`src/entry.js\`):
+
+- Imports the Rust WASM module
+- Routes WebSocket connections to \`NotifyDo\` Durable Object
+- Routes CPU-heavy endpoints to \`HeavyDo\` Durable Object
+- Falls through everything else to Rust WASM
+
+```js
+// Pattern: route → Durable Object → fall through to Rust
+if (env.HEAVY_DO && shouldOffloadToHeavyDo(request, url)) {
+  const stub = env.HEAVY_DO.get(env.HEAVY_DO.idFromName(shardKey));
+  return stub.fetch(request);
+}
+const worker = new RustWorker(ctx, env);
+return worker.fetch(request);
+```
+
+Enabling/disabling: just add/remove the \`HEAVY_DO\` binding in \`wrangler.toml\`.
+
+## 03. HeavyDo CPU Offload
+
+Durable Objects have a **30s CPU budget** vs Workers' few ms on the free plan.
+
+HeavyDo **reuses the same Axum router** — no duplicated business logic.
+
+Routes CPU-heavy endpoints: import, password hashing (PBKDF2), key rotation,
+2FA, account deletion.
+
+```rust
+#[durable_object]
+pub struct HeavyDo { state: State, env: Env }
+
+impl DurableObject for HeavyDo {
+    async fn fetch(&self, req: Request) -> Result<Response> {
+        let http_req: HttpRequest = req.try_into()?;
+        let mut app = router::api_router(self.env.clone())  // same router
+            .layer(cors)
+            .layer(DefaultBodyLimit::max(5 * 1024 * 1024));
+        let http_resp = app.call(http_req).await?;
+        http_resp.try_into()
+    }
+}
+```
+
+Each DO instance is sharded by \`user:shardKey\` for isolation.
+
+## 04. NotifyDo WebSocket Push
+
+\`NotifyDo\` handles WebSocket connections for live sync — desktop and browser extensions.
+
+- Tags-based fan-out: each WS connection tagged by user ID
+- Anonymous hub for Send file downloads
+- Mobile push via Bitwarden relay service (optional)
+
+## 05. D1 Database
+
+SQLite-compatible, serverless, auto-scaling.
+
+- Session-backed reads with \`first-primary\` consistency for write-then-read patterns
+- \`d1_query!\` macro replaces \`worker::query!\` for ergonomic prepared statements
+- Migrations managed via \`wrangler d1 migrations apply\`
+
+```toml
+[[d1_databases]]
+binding = "vault1"
+database_name = "vault1"
+database_id = "${D1_DATABASE_ID}"
+migrations_dir = "migrations"
+```
+
+## 06. Rate Limiting + Assets
+
+Cloudflare-native rate limiting via \`[[ratelimits]]\` in \`wrangler.toml\`.
+
+Static assets served directly from Cloudflare's edge. \`run_worker_first\`
+limits Worker invocation to API routes only. Secrets via Cloudflare Dashboard.
+
+```toml
+[[ratelimits]]
+name = "LOGIN_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
+```
+
+## 07. One-Click CI/CD
+
+**3 workflows**: Build (prod on \`main\`), Deploy Dev (\`dev\`), Backup D1 (daily cron).
+
+**Required secrets**: \`CLOUDFLARE_API_TOKEN\`, \`CLOUDFLARE_ACCOUNT_ID\`, \`D1_DATABASE_ID\`
+
+```yaml
+# CI/CD pipeline steps:
+1. Checkout + Node.js + Rust toolchain
+2. Install worker-build (pinned version)
+3. Download & extract frontend assets + apply overrides
+4. Bootstrap D1 schema (idempotent empty-DB check)
+5. Apply D1 migrations (with retry for edge cases)
+6. npx wrangler deploy
+```
+
+Fork → set 3 secrets → push main → auto-deploys 🚀

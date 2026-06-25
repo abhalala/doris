@@ -1,0 +1,94 @@
+---
+title: Architecture
+description: The D.O.R.I.S. architecture flow — from HTTP request to Rust WASM response
+---
+
+## Request Flow
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│  HTTP Req    │ ──▶ │  JS Entry    │ ──▶ │  Route?     │
+└─────────────┘     │  (entry.js)  │     └──────┬──────┘
+                    └──────────────┘            │
+                                               │
+                    ┌──────────────────────────┼──────────┐
+                    ▼                          ▼          │
+           ┌──────────────┐          ┌──────────────┐     │
+           │  HeavyDo DO  │          │  NotifyDo DO │     │
+           │ (CPU heavy)  │          │  (WebSocket)  │     │
+           └──────────────┘          └──────────────┘     │
+                    │                          │          │
+                    └──────────┬───────────────┘          │
+                               ▼                          ▼
+                    ┌─────────────────────────────────────────┐
+                    │         Rust WASM Worker                │
+                    │         (lib.rs → router.rs)            │
+                    │                                         │
+                    │  ┌──────────┐  ┌──────────┐             │
+                    │  │ Handlers │  │  Models  │             │
+                    │  └────┬─────┘  └────┬─────┘             │
+                    │       │             │                   │
+                    │  ┌────▼─────────────▼─────┐             │
+                    │  │      D1 Database       │             │
+                    │  └────────────────────────┘             │
+                    └─────────────────────────────────────────┘
+```
+
+## Key Design Decisions
+
+### Router Reuse
+
+The critical insight: **HeavyDo reuses the same Axum router as the main Worker**.
+This means you define your routes once in \`src/router.rs\`, and both the
+main Worker and the Durable Object reference it:
+
+```rust
+// Both the main Worker AND HeavyDo use this:
+pub fn api_router(env: Env) -> Router {
+    Router::new()
+        .route("/api/accounts/register", post(register))
+        .route("/api/sync", get(sync))
+        // ... all routes defined here
+}
+```
+
+### DO Sharding
+
+Durable Objects are sharded by \`user:shardKey\` for isolation. Each user
+gets their own DO instance, preventing noisy-neighbor problems:
+
+```rust
+let shardKey = user.uuid.to_string();
+let stub = env.HEAVY_DO.get(env.HEAVY_DO.idFromName(shardKey));
+```
+
+### D1 Consistency
+
+D1 has read-replica consistency. For write-then-read patterns, use
+\`first-primary\` to ensure reads go to the primary:
+
+```rust
+// In db.rs — session-backed reads
+use worker::*;
+
+pub async fn get_user(db: &D1Database, id: &str) -> Result<User> {
+    let stmt = db
+        .prepare("SELECT * FROM users WHERE uuid = ?1")
+        .bind(&[id.into()])?;
+    // first-primary ensures we read the latest write
+    stmt.first::<User>(Some("first-primary")).await
+}
+```
+
+## Component Architecture
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Entry | \`entry.js\` | JS wrapper for DO routing + WS |
+| Router | Axum (\`router.rs\`) | All HTTP routes defined once |
+| Handlers | Axum handlers (\`handlers/*.rs\`) | Business logic per endpoint |
+| Models | Struct definitions (\`models/*.rs\`) | Data types + DB models |
+| Database | D1 (SQLite on Cloudflare) | Persistent storage |
+| Storage | R2 / KV | File attachments, config |
+| CPU Offload | \`HeavyDo\` (Durable Object) | CPU-heavy operations |
+| Push | \`NotifyDo\` (Durable Object) | WebSocket notifications |

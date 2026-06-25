@@ -1,0 +1,77 @@
+---
+title: Project Structure
+description: The recommended directory layout for a D.O.R.I.S. project
+---
+
+## Directory Layout
+
+```
+doris/
+├── src/
+│   ├── entry.js              # JS wrapper: DO routing + WS + fallthrough
+│   ├── lib.rs                # Rust entry: fetch + scheduled event handlers
+│   ├── router.rs             # Axum Router definition (all routes in one place)
+│   ├── db.rs                 # D1 connection management + d1_query! macro
+│   ├── auth.rs               # JWT auth (HS256), Claims extractor, AuthUser
+│   ├── error.rs              # AppError enum
+│   ├── crypto.rs             # PBKDF2, argon2, hashing
+│   ├── client_context.rs     # Client context helpers
+│   ├── background.rs         # Background task helpers
+│   ├── notifications.rs      # WS push notification types + fanout logic
+│   ├── push.rs              # Mobile push relay
+│   ├── handlers/            # Axum handler functions, grouped by feature
+│   │   ├── mod.rs
+│   │   ├── accounts.rs
+│   │   ├── identity.rs
+│   │   ├── ciphers.rs
+│   │   ├── folders.rs
+│   │   ├── attachments.rs
+│   │   ├── streaming.rs
+│   │   ├── sync.rs
+│   │   ├── imports.rs
+│   │   ├── sends.rs
+│   │   ├── devices.rs
+│   │   ├── auth_requests.rs
+│   │   ├── twofactor.rs
+│   │   ├── domains.rs
+│   │   ├── config.rs
+│   │   ├── meta.rs
+│   │   └── purge.rs
+│   ├── models/              # Data types + DB models
+│   │   ├── user.rs
+│   │   ├── cipher.rs
+│   │   ├── folder.rs
+│   │   └── send.rs
+│   └── durable/             # Durable Object implementations
+│       ├── heavy_do.rs      # CPU-offload DO (reuses router::api_router)
+│       └── notify_do.rs     # WebSocket hub DO
+├── migrations/              # D1 migration SQL files
+│   ├── 0001_add_users.sql
+│   └── 0002_add_ciphers.sql
+├── sql/
+│   └── schema.sql           # Base D1 schema (CREATE TABLE IF NOT EXISTS)
+├── docs/
+│   ├── deployment.md        # CLI + CI/CD deploy guide
+│   └── db-backup-recovery.md
+├── scripts/
+│   └── seed-global-domains.sh
+├── public/
+│   └── css/vaultwarden.css  # Optional UI overrides
+├── .github/workflows/
+│   ├── push-cloudflare.yaml # Prod build+deploy (main branch)
+│   ├── deploy-dev.yaml      # Dev deploy (dev branch)
+│   └── backup-d1.yaml       # Daily D1 backup
+├── wrangler.toml            # Cloudflare config
+├── Cargo.toml               # Rust deps
+├── rust-toolchain.toml      # Pinned Rust version
+└── AGENTS.md                # AI agent guidelines
+```
+
+## Key Files
+
+<Cards>
+  <Card title="src/entry.js" description="JS wrapper that routes WebSocket → NotifyDo, CPU-heavy → HeavyDo, everything else → Rust WASM." />
+  <Card title="src/durable/heavy_do.rs" description="~60 lines — just calls router::api_router() like the main Worker. No duplicated logic." />
+  <Card title="wrangler.toml" description="Dual env (prod/dev), DO bindings, D1, KV, rate limits, static assets, cron triggers." />
+  <Card title=".github/workflows/" description="Full one-click deploy pipeline with D1 bootstrap resilience." />
+</Cards>

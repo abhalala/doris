@@ -1,0 +1,50 @@
+---
+title: Reference Implementation
+description: warden-worker — A Bitwarden-compatible server built on D.O.R.I.S.
+---
+
+## warden-worker
+
+[warden-worker](https://github.com/abhalala/warden-worker) is the reference
+implementation of the D.O.R.I.S. pattern — a fully functional Bitwarden-compatible
+server running entirely on Cloudflare Workers.
+
+### Features
+
+- **Rust → WASM** on Cloudflare Workers using the \`worker\` crate
+- **Durable Objects** for CPU-heavy operations (password hashing, key rotation, imports)
+- **D1** for all persistent storage (users, ciphers, folders, sends, etc.)
+- **WebSocket push** for real-time sync (desktop + browser extensions)
+- **One-click CI/CD** from GitHub to Cloudflare
+- **Zero infrastructure** — no VPS, no containers, no Kubernetes
+
+### Architecture
+
+warden-worker follows the exact same architecture described in these docs:
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| JS Entry | \`src/entry.js\` | DO routing + WS + fallthrough |
+| Router | \`src/router.rs\` | Axum router (single source of truth) |
+| DB | \`src/db.rs\` | D1 with \`d1_query!\` macro |
+| HeavyDo | \`src/durable/heavy_do.rs\` | CPU offload |
+| NotifyDo | \`src/durable/notify_do.rs\` | WebSocket push |
+
+### Deployment
+
+```bash
+# Clone and deploy
+git clone https://github.com/abhalala/warden-worker
+cd warden-worker
+
+# Set up Cloudflare
+npx wrangler d1 create vault1
+npx wrangler deploy
+
+# Set secrets in Cloudflare Dashboard:
+# JWT_SECRET, JWT_REFRESH_SECRET, ALLOWED_EMAILS
+```
+
+Or use the one-click CI/CD: fork → set 3 GitHub Secrets → push \`main\` 🚀
+
+<Card title="View on GitHub" href="https://github.com/abhalala/warden-worker" icon="github" />

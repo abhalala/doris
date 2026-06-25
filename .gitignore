@@ -1,7 +1,8 @@
 node_modules/
-target/
-.env
-.env.local
-*.wasm
-.DS_Store
+.next/
+# Fumadocs generates .source/ from content/
+.source/
+out/
+*.tsbuildinfo
+next-env.d.ts
 .wrangler/
