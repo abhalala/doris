@@ -24,7 +24,20 @@ Source files live in `public/`. When the D.O.R.I.S. pattern is used for an actua
 
 ## Deploy
 
-Cloudflare Pages auto-deploys from `main` branch. Set `CLOUDFLARE_API_TOKEN` in GitHub Secrets.
+Cloudflare Pages auto-deploys from `main` branch. Set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in GitHub Secrets.
+
+### Current Deployments
+
+- **Pages project:** `doris` (ID: 9997285a-09c4-413e-81f7-274bc74f4eb8)
+- **Production URL:** https://doris-4cn.pages.dev
+- **Custom domain (pending DNS):** https://doris.bhalala.org
+- **Account ID:** `e964e7338c7bd53c84a54679fbefa48a`
+
+### Manual Deploy
+
+```bash
+npx wrangler pages deploy public --project-name=doris
+```
 
 ## Security
 
